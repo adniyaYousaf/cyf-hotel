@@ -1,6 +1,6 @@
 # Terraform state files and config
 *.tfstate
-*.tfvars
+terraform.tfvars
 *.tfvars.json
 override.tf
 override.tf.json
@@ -9,3 +9,5 @@ override.tf.json
 .terraform/
 .terraform.lock.hcl
 crash.log
+docker-cicd-key.pub
+docker-cicd-key
