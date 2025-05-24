@@ -11,3 +11,4 @@ override.tf.json
 crash.log
 docker-cicd-key.pub
 docker-cicd-key
+.ssh

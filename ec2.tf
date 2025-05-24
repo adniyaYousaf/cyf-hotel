@@ -1,66 +1,25 @@
-provider "aws" {
-  region  = "eu-north-1"
-  profile = "default"
+
+# Fetch default VPC
+data "aws_vpc" "default" {
+  default = true
 }
 
-
-#create vpc
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  instance_tenancy     = "default"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-
-  tags = {
-    Name = "main"
+# Fetch default subnets in that VPC (usually one per AZ)
+data "aws_subnets" "default_vpc_subnets" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
 }
 
-# Create a Subnet
-resource "aws_subnet" "main" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
-  tags = {
-    Name = "main-subnet"
-  }
-}
-
-
-# Create an Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "main-gateway"
-  }
-}
-
-# Create a Route Table
-resource "aws_route_table" "main" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "main-route-table"
-  }
-}
-
-resource "aws_route_table_association" "main" {
-  subnet_id      = aws_subnet.main.id
-  route_table_id = aws_route_table.main.id
-}
-
-
-# Create a Security Group
-resource "aws_security_group" "instance" {
-  vpc_id = aws_vpc.main.id
+# Create a Security Group in the default VPC
+resource "aws_security_group" "default_vpc_sg" {
+  name        = "default-vpc-ec2-sg"
+  description = "Allow SSH, HTTP, and DB access"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -68,6 +27,7 @@ resource "aws_security_group" "instance" {
   }
 
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -75,6 +35,7 @@ resource "aws_security_group" "instance" {
   }
 
   ingress {
+    description = "App Port"
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
@@ -82,10 +43,11 @@ resource "aws_security_group" "instance" {
   }
 
   ingress {
+    description = "Postgres DB"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"] # You may want to restrict this more tightly to your subnet CIDR or security group
   }
 
   egress {
@@ -96,27 +58,38 @@ resource "aws_security_group" "instance" {
   }
 
   tags = {
-    Name = "instance-security-group"
+    Name = "default-vpc-ec2-sg"
   }
 }
 
-resource "aws_key_pair" "docker-cicd" {
-  key_name   = "docker-cicd"
-  public_key = file("${path.module}/docker-cicd-key.pub")
+# Import your existing public key or create a new one
+resource "aws_key_pair" "docker_cicd" {
+  key_name   = "docker-cicd-1"
+  public_key = file(".ssh/docker-cicd-key.pub")
+}
+
+resource "aws_security_group_rule" "ec2_to_db" {
+  type        = "ingress"
+  from_port   = 5432              # Port MySQL listens on
+  to_port     = 5432
+  protocol    = "tcp"
+  security_group_id = var.sg-ec2-to-rds   
+  source_security_group_id = aws_security_group.sg_for_ec2.id  # The security group for your EC2 instances (allowed source)
 }
 
 
-resource "aws_instance" "backend-server" {
-  ami             = "ami-0c1ac8a41498c1a9c"
-  instance_type   = "t3.micro"
-  subnet_id       = aws_subnet.main.id
-  security_groups = [aws_security_group.instance.id]
-  key_name        = aws_key_pair.docker-cicd.key_name
+# Launch EC2 instance in the default subnet (first subnet found)
+resource "aws_instance" "backend_server" {
+  ami                    = "ami-0c1ac8a41498c1a9c" # Adjust as needed for your region
+  instance_type          = "t3.micro"
+  subnet_id              = data.aws_subnets.default_vpc_subnets.ids[0]
+  vpc_security_group_ids = [aws_security_group.default_vpc_sg.id]
+  key_name               = aws_key_pair.docker_cicd.key_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "terraform-full-stack-app"
   }
 
   user_data = file("${path.module}/script.sh")
-
 }

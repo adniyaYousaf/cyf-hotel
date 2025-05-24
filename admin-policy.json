@@ -3,7 +3,14 @@
 		"Statement": [
 			{
 			    "Effect": "Allow",
-				"Action": "*",
+				"Action": [
+					"s3:Put*",
+					"s3:Get*",
+					"s3:Delete*",
+					"s3:List*",
+					"ec2:RevokeSecurityGroupIngress",
+					"ec2:AuthorizeSecurityGroupIngress"
+				],
 				"Resource": "*"
 			}
 		]
