@@ -68,15 +68,6 @@ resource "aws_key_pair" "docker_cicd" {
   public_key = file(".ssh/docker-cicd-key.pub")
 }
 
-resource "aws_security_group_rule" "ec2_to_db" {
-  type        = "ingress"
-  from_port   = 5432              # Port MySQL listens on
-  to_port     = 5432
-  protocol    = "tcp"
-  security_group_id = var.sg-ec2-to-rds   
-  source_security_group_id = aws_security_group.sg_for_ec2.id  # The security group for your EC2 instances (allowed source)
-}
-
 
 # Launch EC2 instance in the default subnet (first subnet found)
 resource "aws_instance" "backend_server" {
