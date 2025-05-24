@@ -1,10 +1,8 @@
-
-# Fetch default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# Fetch default subnets in that VPC (usually one per AZ)
+
 data "aws_subnets" "default_vpc_subnets" {
   filter {
     name   = "vpc-id"
@@ -47,7 +45,7 @@ resource "aws_security_group" "default_vpc_sg" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # You may want to restrict this more tightly to your subnet CIDR or security group
+    cidr_blocks = ["0.0.0.0/0"] 
   }
 
   egress {
@@ -62,14 +60,12 @@ resource "aws_security_group" "default_vpc_sg" {
   }
 }
 
-# Import your existing public key or create a new one
 resource "aws_key_pair" "docker_cicd" {
   key_name   = "docker-cicd-1"
   public_key = file(".ssh/docker-cicd-key.pub")
 }
 
 
-# Launch EC2 instance in the default subnet (first subnet found)
 resource "aws_instance" "backend_server" {
   ami                    = "ami-0c1ac8a41498c1a9c" # Adjust as needed for your region
   instance_type          = "t3.micro"
