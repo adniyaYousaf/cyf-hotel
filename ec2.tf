@@ -1,19 +1,69 @@
-data "aws_vpc" "default" {
-  default = true
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "main"
+  }
 }
 
-data "aws_subnets" "default_vpc_subnets" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "main-igw"
   }
+}
+
+resource "aws_subnet" "subnet_1" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "eu-north-1a"
+
+  tags = {
+    Name = "main-subnet-1"
+  }
+}
+
+resource "aws_subnet" "subnet_2" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "eu-north-1b"
+
+  tags = {
+    Name = "main-subnet-2"
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name = "main-public-rt"
+  }
+}
+
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.subnet_1.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "b" {
+  subnet_id      = aws_subnet.subnet_2.id
+  route_table_id = aws_route_table.public.id
 }
 
 # Create a Security Group in the default VPC
 resource "aws_security_group" "default_vpc_sg" {
   name        = "default-vpc-ec2-sg"
   description = "Allow SSH, HTTP, and DB access"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "SSH"
@@ -67,7 +117,7 @@ resource "aws_security_group" "default_vpc_sg" {
     from_port   = 9100
     to_port     = 9100
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # or restrict to Prometheus IP
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -104,28 +154,29 @@ resource "aws_key_pair" "docker_cicd" {
 }
 
 
-data "aws_security_group" "rds_sg" {
-  id = "sg-08a97375cfa69b048"  
-}
+# data "aws_security_group" "rds_sg" {
+#   id = "sg-08a97375cfa69b048"  
+# }
 
 
-resource "aws_security_group_rule" "allow_ec2_to_rds_postgres" {
-  type                     = "ingress"
-  from_port               = 5432
-  to_port                 = 5432
-  protocol                = "tcp"
-  security_group_id       = data.aws_security_group.rds_sg.id
-  source_security_group_id = aws_security_group.default_vpc_sg.id
-  description             = "Allow EC2 access to RDS PostgreSQL"
-}
+# resource "aws_security_group_rule" "allow_ec2_to_rds_postgres" {
+#   type                     = "ingress"
+#   from_port               = 5432
+#   to_port                 = 5432
+#   protocol                = "tcp"
+#   security_group_id       = data.aws_security_group.rds_sg.id
+#   source_security_group_id = aws_security_group.default_vpc_sg.id
+#   description             = "Allow EC2 access to RDS PostgreSQL"
+# }
 
 resource "aws_instance" "backend_server" {
   ami                    = "ami-0c1ac8a41498c1a9c" 
   instance_type          = "t3.micro"
-  subnet_id              = data.aws_subnets.default_vpc_subnets.ids[0]
+  subnet_id              = aws_subnet.subnet_1.id
   vpc_security_group_ids = [aws_security_group.default_vpc_sg.id]
   key_name               = aws_key_pair.docker_cicd.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  associate_public_ip_address = true
 
   tags = {
     Name = "terraform-full-stack-app"
