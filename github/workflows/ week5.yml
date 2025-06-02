@@ -13,7 +13,7 @@ jobs:
         working-directory: terraform
 
     steps:
-    - name: Checkout code
+    - name: Get code
       uses: actions/checkout@v3
 
     - name: Setup Terraform
